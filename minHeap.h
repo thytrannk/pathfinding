@@ -53,8 +53,9 @@ public:
     void decreaseKey(uint64_t i, type new_val, vector<node> *stateVec, bool waiting, bool forward);
     // return the minimum element
     pair<type, uint64_t> getMin();
-//    // delete element at index i
-//    void deleteElement(uint64_t i);
+    // delete element at index i
+    // hat = true when operating on open hat; false when operating on open
+    void deleteElement(uint64_t i, vector<node> *stateVec, bool hat);
     // insert a new element, returns index of that element in heap. This will modify the queue location of the node in stateVec
     uint64_t insertKey(pair<type, uint64_t> elem, vector<node> *stateVec);
     // insert a new element, returns index of that element in heap. This will modify the queue location of the node in stateVec
@@ -276,11 +277,11 @@ pair<type, uint64_t> MinHeap<type, node>::getMin() {
     return heap[0];
 }
 
-//template <typename type, typename node>
-//void MinHeap<type, node>::deleteElement(uint64_t i) {
-//    decreaseKey(i, numeric_limits<type, node>::min());
-//    extractMin();
-//}
+template <typename type, typename node>
+void MinHeap<type, node>::deleteElement(uint64_t i, vector<node> *stateVec, bool hat) {
+    decreaseKey(i, numeric_limits<type>::min(), stateVec, hat);
+    extractMin(stateVec, hat);
+}
 
 template <typename type, typename node>
 uint64_t MinHeap<type, node>::insertKey(pair<type, uint64_t> elem, vector<node> *stateVec) {

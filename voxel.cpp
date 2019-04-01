@@ -411,6 +411,21 @@ HeuristicVoxel::HeuristicVoxel(vector<vector<double>> list, char lookupChar, int
 
 double HeuristicVoxel::hCost(StateVoxel &node1, StateVoxel &node2) {
     double ret = 0;
+    if (hList.empty()) {
+        // zero heuristic, used for Dijkstra algorithm
+        return ret;
+    }
+    // voxel heuristic
+    int deltaX = abs(node1.getValue(0) - node2.getValue(0));
+    int deltaY = abs(node1.getValue(1) - node2.getValue(1));
+    int deltaZ = abs(node1.getValue(2) - node2.getValue(2));
+    ret = voxelHeuristic(deltaX, deltaY, deltaZ);
+    if (hList.size() == 1) {
+        if (hList[0].size() == 1) {
+            // only use default voxel heuristic
+            return ret;
+        }
+    }
     unsigned long index1 = (unsigned long) node1.getValue(2) * xMap * yMap + (unsigned long) node1.getValue(1) * xMap + node1.getValue(0);
     unsigned long index2 = (unsigned long) node2.getValue(2) * xMap * yMap + (unsigned long) node2.getValue(1) * xMap + node2.getValue(0);
     if (lookup == 'm') {
@@ -422,21 +437,23 @@ double HeuristicVoxel::hCost(StateVoxel &node1, StateVoxel &node2) {
             }
         }
     } else if (lookup == 's') {
-        if (!hList.empty()) {
-            // Look up from one heuristic only
-            auto vec = hList[0];
-            ret = abs(vec[index1] - vec[index2]);
+        // Look up from one heuristic only
+        auto vec = hList[0];
+        double temp = abs(vec[index1] - vec[index2]);
+        if (temp > ret) {
+            ret = temp;
         }
     } else {
-        if (!hList.empty()) {
-            // Random heuristic from the list
-            random_device dev;
-            mt19937 rng(dev());
-            //        mt19937 rng(55);
-            uniform_int_distribution<mt19937::result_type> rand(0, (unsigned int) hList.size() - 1);
-            int indexH = rand(rng);
-            auto vec = hList[indexH];
-            ret = abs(vec[index1] - vec[index2]);
+        // Random heuristic from the list
+        random_device dev;
+        mt19937 rng(dev());
+        //        mt19937 rng(55);
+        uniform_int_distribution<mt19937::result_type> rand(0, (unsigned int) hList.size() - 1);
+        int indexH = rand(rng);
+        auto vec = hList[indexH];
+        double temp = abs(vec[index1] - vec[index2]);
+        if (temp > ret) {
+            ret = temp;
         }
     }
     return ret;

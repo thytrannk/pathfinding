@@ -24,6 +24,9 @@ namespace std {
         static pair<double, double> max() {
             return pair<double, double>{DBL_MAX, DBL_MAX};
         };
+        static pair<double, double> min() {
+            return pair<double, double>{DBL_MIN, DBL_MIN};
+        };
     };
 }
 
@@ -337,9 +340,50 @@ void WeightedAStar<state, action, environment, heuristic>::getPath(environment &
     double fIncumbent = DBL_MAX;
     double fHatIncumbent = DBL_MAX;
     while (bound * open.getMin().first < fIncumbent) {
+        pair<pair<double, double>, uint64_t> n;
         if (openHat.getMin().first < fHatIncumbent) {
-            pair<pair<double, double>, uint64_t> n = openHat.extractMin(&stateVec, true);
-
+            n = openHat.extractMin(&stateVec, true);
+            open.deleteElement(stateVec[n.second].locationOnOpen, &stateVec, false);
+        } else {
+            n = open.extractMin(&stateVec, false);
+            openHat.deleteElement(stateVec[n.second].locationOnOpenHat, &stateVec, true);
+        }
+        stateVec[n.second].closed = true;
+        if (stateVec[n.second].thisState == g) {
+            fIncumbent = stateVec[n.second].gCost;
+            fHatIncumbent = stateVec[n.second].gCost;
+        }
+        e->getActions(stateVec[n.second].thisState, actions);
+        for (auto &act : actions) {
+            // go through each child node
+            // thread's cancellation point
+            pthread_testcancel();
+            // make a copy of the current state
+            state childState = stateVec[n.second].thisState;
+            // move the childState according to action taken
+            e->applyAction(childState, act);
+            // check if this child node has been generated
+            auto search = hashMap.find(childState);
+            double tentative_gcost = stateVec[n.second].gcost + e->edgeCost(stateVec[n.second].thisState, childState);
+            if (search != hashMap.end()) {
+                // found, child node has been generated before
+                if (!stateVec[search->second].closed) {
+                    // duplicated in open
+                    if (tentative_gcost < stateVec[search->second].gcost) {
+                        // better than the duplicate
+                        stateVec[search->second].parent = stateVec[n.second].thisState;
+                        stateVec[search->second].gcost = tentative_gcost;
+                        open.decreaseKey(stateVec[search->second].locationOnOpen,
+                                          pair<double, double>{tentative_gcost + h->hCost(childState, g),
+                                                               h->hCost(childState, g)}, &stateVec, false);
+                        openHat.decreaseKey(stateVec[search->second].locationOnOpenHat,
+                                         pair<double, double>{tentative_gcost + weight * h->hCost(childState, g),
+                                                              weight * h->hCost(childState, g)}, &stateVec, true);
+                    }
+                } else {
+                    // duplicated in close
+                }
+            }
         }
     }
 }
