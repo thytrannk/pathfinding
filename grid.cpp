@@ -171,6 +171,8 @@ double EnvironmentGrid::edgeCost(StateGrid &node1, StateGrid &node2) {
     } else if (sum == 2) {
         return sqrt(2);
     } else {
+        node1.display();
+        node2.display();
         cerr << "Illegal move detected." << endl;
         exit(EXIT_FAILURE);
     }

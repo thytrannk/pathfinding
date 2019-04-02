@@ -46,10 +46,9 @@ private:
         double gcost = DBL_MAX;
         double hcost = 0;
         uint64_t locationOnOpen = UINT64_MAX;
-        uint64_t locationOnOpenHat = UINT64_MAX;
-        node(state s, state p, bool isClosed, double g, double h, uint64_t locationOpen, uint64_t locationOpenHat)
-                : thisState(s), parent(p), closed(isClosed), gcost(g), hcost(h), locationOnOpen(locationOpen), locationOnOpenHat(locationOpenHat) {}
-        node(state s, state p, double g, double h) : node(s, p, false, g, h, UINT64_MAX, UINT64_MAX) {}
+        node(state s, state p, bool isClosed, double g, double h, uint64_t location)
+                : thisState(s), parent(p), closed(isClosed), gcost(g), hcost(h), locationOnOpen(location) {}
+        node(state s, state p, double g, double h) : node(s, p, false, g, h, UINT64_MAX) {}
         node(state s, state p) : node(s, p, DBL_MAX, 0) {}
     } Node;
     // hash map of states and index in state vector
@@ -75,10 +74,11 @@ private:
         bool closed = false;
         double gcost = DBL_MAX;
         uint64_t locationOnOpen = UINT64_MAX;
-        node(state s, state p, bool isClosed, double cost, uint64_t location)
-                : thisState(s), parent(p), closed(isClosed), gcost(cost), locationOnOpen(location) {}
-        node(state s, state p, double cost) : node(s, p, false, cost, UINT64_MAX) {}
-        node(state s, state p) : node(s, p, DBL_MAX) {}
+        uint64_t locationOnOpenHat = UINT64_MAX;
+        node(state s, state p, bool isClosed, double g, uint64_t locationOpen, uint64_t locationOpenHat)
+                : thisState(s), parent(p), closed(isClosed), gcost(g), locationOnOpen(locationOpen), locationOnOpenHat(locationOpenHat) {}
+        node(state s, state p, double g) : node(s, p, false, g, UINT64_MAX, UINT64_MAX) {}
+        node(state s, state p) : node(s, p, DBL_MAX, 0) {}
     } Node;
     // hash map of states and index in state vector
     unordered_map<state, uint64_t> hashMap;
@@ -198,12 +198,12 @@ void Astar<state, action, environment, heuristic>::getPath(environment &e, heuri
             }
 
             cout << "Cost of solution: " << stateVec[current.second].gcost << endl;
-//            cout << "Number of nodes generated: " << nodeGenerated << endl;
-            cout << "Number of nodes expanded: " << nodeExpanded << endl;
-            cout << "Number of nodes in open list: " << queue.size() << endl;
-            cout << "Number of nodes in closed list: " << nodeExpanded - nodeReopened << endl;
-            cout << "Number of times nodes are updated in the open list: " << nodeUpdated << endl;
-            cout << "Number of times nodes are updated in the closed list: " << nodeReopened << endl;
+            cout << "Number of nodes generated: " << stateVec.size() << endl;
+//            cout << "Number of nodes expanded: " << nodeExpanded << endl;
+//            cout << "Number of nodes in open list: " << queue.size() << endl;
+//            cout << "Number of nodes in closed list: " << nodeExpanded - nodeReopened << endl;
+//            cout << "Number of times nodes are updated in the open list: " << nodeUpdated << endl;
+//            cout << "Number of times nodes are updated in the closed list: " << nodeReopened << endl;
 
             return;
         }
@@ -328,32 +328,32 @@ WeightedAStar<state, action, environment, heuristic>::WeightedAStar(state &s, st
 template <class state, class action, class environment, class heuristic>
 void WeightedAStar<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state &s, state &g,
                                                            vector<state> &path) {
-    uint64_t nodeExpanded = 0;
-    uint64_t nodeUpdated = 0;
     // insert start state into the queue, which is at index 0 in state vector
-    open.insertKey(pair<pair<double, double>, uint64_t>{{h->hCost(s, g), h->hCost(s, g)}, 0}, &stateVec, false);
-    openHat.insertKey(pair<pair<double, double>, uint64_t>{{weight * h->hCost(s, g), weight * h->hCost(s, g)}, 0}, &stateVec, true);
+    open.insertKey(pair<pair<double, double>, uint64_t>{{h.hCost(s, g), h.hCost(s, g)}, 0}, &stateVec, false);
+    openHat.insertKey(pair<pair<double, double>, uint64_t>{{weight * h.hCost(s, g), weight * h.hCost(s, g)}, 0}, &stateVec, true);
     vector<action> actions;
     actions.reserve(26);
     vector<state> childStates;
     childStates.reserve(26);
     double fIncumbent = DBL_MAX;
     double fHatIncumbent = DBL_MAX;
-    while (bound * open.getMin().first < fIncumbent) {
+    while (bound * open.getMin().first.first < fIncumbent) {
         pair<pair<double, double>, uint64_t> n;
-        if (openHat.getMin().first < fHatIncumbent) {
+        if (openHat.getMin().first.first < fHatIncumbent) {
             n = openHat.extractMin(&stateVec, true);
             open.deleteElement(stateVec[n.second].locationOnOpen, &stateVec, false);
         } else {
             n = open.extractMin(&stateVec, false);
             openHat.deleteElement(stateVec[n.second].locationOnOpenHat, &stateVec, true);
         }
+//        stateVec[n.second].thisState.display();
         stateVec[n.second].closed = true;
         if (stateVec[n.second].thisState == g) {
-            fIncumbent = stateVec[n.second].gCost;
-            fHatIncumbent = stateVec[n.second].gCost;
+            fIncumbent = stateVec[n.second].gcost;
+            fHatIncumbent = stateVec[n.second].gcost;
+
         }
-        e->getActions(stateVec[n.second].thisState, actions);
+        e.getActions(stateVec[n.second].thisState, actions);
         for (auto &act : actions) {
             // go through each child node
             // thread's cancellation point
@@ -361,31 +361,71 @@ void WeightedAStar<state, action, environment, heuristic>::getPath(environment &
             // make a copy of the current state
             state childState = stateVec[n.second].thisState;
             // move the childState according to action taken
-            e->applyAction(childState, act);
+            e.applyAction(childState, act);
             // check if this child node has been generated
             auto search = hashMap.find(childState);
-            double tentative_gcost = stateVec[n.second].gcost + e->edgeCost(stateVec[n.second].thisState, childState);
+            double tentative_gcost = stateVec[n.second].gcost + e.edgeCost(stateVec[n.second].thisState, childState);
             if (search != hashMap.end()) {
                 // found, child node has been generated before
                 if (!stateVec[search->second].closed) {
                     // duplicated in open
-                    if (tentative_gcost < stateVec[search->second].gcost) {
+                    // plus epsilon to prevent small accuracies of type double's value resulting in unnecessary updating
+                    if (tentative_gcost + EPSILON < stateVec[search->second].gcost) {
                         // better than the duplicate
                         stateVec[search->second].parent = stateVec[n.second].thisState;
                         stateVec[search->second].gcost = tentative_gcost;
                         open.decreaseKey(stateVec[search->second].locationOnOpen,
-                                          pair<double, double>{tentative_gcost + h->hCost(childState, g),
-                                                               h->hCost(childState, g)}, &stateVec, false);
+                                          pair<double, double>{tentative_gcost + h.hCost(childState, g),
+                                                               h.hCost(childState, g)}, &stateVec, false);
                         openHat.decreaseKey(stateVec[search->second].locationOnOpenHat,
-                                         pair<double, double>{tentative_gcost + weight * h->hCost(childState, g),
-                                                              weight * h->hCost(childState, g)}, &stateVec, true);
+                                         pair<double, double>{tentative_gcost + weight * h.hCost(childState, g),
+                                                              weight * h.hCost(childState, g)}, &stateVec, true);
                     }
                 } else {
                     // duplicated in close
+                    // plus epsilon to prevent small accuracies of type double's value resulting in unnecessary reopening
+                    if (tentative_gcost + EPSILON < stateVec[search->second].gcost) {
+                        stateVec[search->second].parent = stateVec[n.second].thisState;
+                        stateVec[search->second].gcost = tentative_gcost;
+                        open.insertKey(pair<pair<double, double>, uint64_t>
+                                                {{tentative_gcost + h.hCost(childState, g), h.hCost(childState, g)},
+                                                 search->second}, &stateVec, false);
+                        openHat.insertKey(pair<pair<double, double>, uint64_t>
+                                               {{tentative_gcost + weight * h.hCost(childState, g), weight * h.hCost(childState, g)},
+                                                search->second}, &stateVec, true);
+                    }
                 }
+            } else {
+                // not found (newly discovered node)
+                Node childNode(childState, stateVec[n.second].thisState, tentative_gcost);
+                // add node to state vector and hash table
+                stateVec.emplace_back(childNode);
+                hashMap.emplace(childState, stateVec.size() - 1);
+                open.insertKey(pair<pair<double, double>, uint64_t> {{tentative_gcost + h.hCost(childState, g),
+                                                                      h.hCost(childState, g)}, stateVec.size() - 1}, &stateVec, false);
+                openHat.insertKey(pair<pair<double, double>, uint64_t>{{tentative_gcost + weight * h.hCost(childState, g),
+                                                                        weight * h.hCost(childState, g)}, stateVec.size() - 1}, &stateVec, true);
             }
         }
+        actions.clear();
+        childStates.clear();
     }
+    // found the goal state
+    // record the path from goal to start
+    path.emplace_back(g);
+    state temp = g;
+
+    while (true) {
+        uint64_t index = hashMap[temp];
+        if (stateVec[index].parent == stateVec[index].thisState) {
+            break;
+        } else {
+            path.emplace_back(stateVec[index].parent);
+        }
+        temp = stateVec[index].parent;
+    }
+    cout << "Cost of solution: " << fIncumbent << endl;
+    cout << "Number of nodes generated: " << stateVec.size() << endl;
 }
 
 template<class state, class action, class environment, class heuristic>
