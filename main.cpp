@@ -13,13 +13,16 @@
 
 using namespace std;
 
+#define SUBOPTIMAL_BOUND 2
+
 enum algorithm {
     astar,
     dijkstra,
     dfid,
     idastar,
     nbs,
-    optimistic
+    optimistic,
+    weightedAstar,
 };
 
 typedef struct argStructPuzzle {
@@ -58,12 +61,11 @@ void usage(char *programName) {
                                         " <input_file_1> <input_file_2> <no_of_problems>" << endl
             << "where" << endl
             << "problem_domain: \"p\" (for sliding tile puzzle), \"v\" (for 3D voxel), or \"g\" (for 2D grid)" << endl
-            << "algorithm: \"1\" for A*, \"2\" for Dijkstra, \"3\" for DFID, \"4\" for IDA*, \"5\" for NBS, \"6\" for optimistic search" << endl
+            << "algorithm: \"1\" for A*, \"2\" for Dijkstra, \"3\" for DFID, \"4\" for IDA*, \"5\" for NBS, \"6\" for optimistic search, \"7\" for weighted A*" << endl
             << "print_path: either \"y\" (to print each step once the path to the goal is found) or \"n\" (not to print path)" << endl
             << "input_file_1: the problem instance file for sliding tile puzzle; map file for 3D voxel or 2D grid" << endl
             << "input_file_2: the problem instance file for 3D voxel or 2D grid (this argument should be left blank for sliding tile puzzle)" << endl
-            << "no_of_problems: maximum number of problems to solve" << endl
-            << "For puzzle domain, please place the PDB file PDB2.txt in the current directory before running this program." << endl;
+            << "no_of_problems: maximum number of problems to solve" << endl;
 }
 
 int main(int argc, char **argv) {
@@ -104,6 +106,9 @@ int main(int argc, char **argv) {
             break;
         case 6:
             algo = optimistic;
+            break;
+        case 7:
+            algo = weightedAstar;
             break;
         default:
             cerr << "Invalid input." << endl;
@@ -156,22 +161,7 @@ void programPuzzle(string fileName, algorithm algo, int no_of_problems, int &fai
 
         EnvironmentPuzzle<StatePuzzle> e;
         // Manhattan distance heuristic
-//        vector<pair<int, vector<uint8_t>*>> h = {pair<int, vector<uint8_t>*>{0, nullptr}};
-        // Manhattan + PDBs heuristic
-        ifstream pdb2File("PDB2.txt");
-        if (!pdb2File.is_open()) {
-            cerr << "Please place the PDB file PDB2.txt in the build folder before running this program." << endl;
-            exit(EXIT_FAILURE);
-        }
-        vector<uint8_t> pdb2(524160);
-        int temp;
-        for (int i = 0; i < 524160; i++) {
-            pdb2File >> temp;
-            pdb2[i] = (uint8_t) temp;
-        }
-        cout << "PDB2 loaded." << endl;
-        vector<pair<int, vector<uint8_t>*>> h = {pair<int, vector<uint8_t>*>{0, nullptr}, // Manhattan distance
-                                                 pair<int, vector<uint8_t>*>{3, &pdb2}};  // PDB3 heuristic
+        vector<pair<int, vector<uint8_t>*>> h = {pair<int, vector<uint8_t>*>{0, nullptr}};
         // zero heuristic
         vector<pair<int, vector<uint8_t>*>> h0;
         HeuristicPuzzle astarHeuristic(&h);
@@ -206,10 +196,10 @@ void programPuzzle(string fileName, algorithm algo, int no_of_problems, int &fai
             vector<StatePuzzle> path;
             args.path = path;
             args.algo = algo;
-            if (algo == astar || algo == idastar || algo == nbs) {
-                args.h = &astarHeuristic;
-            } else {
+            if (algo == dijkstra || algo == dfid) {
                 args.h = &zeroHeuristic;
+            } else {
+                args.h = &astarHeuristic;
             }
 
             enter_thread = false;
@@ -360,10 +350,10 @@ void programGrid(string mapFileName, string problemFileName, algorithm algo, int
             vector<StateGrid> path;
             args.path = path;
             args.algo = algo;
-            if (algo == astar || algo == idastar || algo == nbs) {
-                args.h = &astarHeuristic;
-            } else {
+            if (algo == dijkstra || algo == dfid) {
                 args.h = &zeroHeuristic;
+            } else {
+                args.h = &astarHeuristic;
             }
 
             enter_thread = false;
@@ -455,6 +445,23 @@ void *runPuzzle(void *arguments) {
             cout << "Steps:" << endl;
             iterPuzzle.displayPath(args->path);
         }
+    } else if (args->algo == optimistic || args->algo == weightedAstar) {
+        cout << "IDA*:" << endl;
+        IteratedDeepening<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> iterPuzzle;
+        iterPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
+        cout << "Optimistic:" << endl;
+        WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, true);
+        weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        cout << "Weighted A*:" << endl;
+        WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, false);
+        weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        
+//        WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, args->algo == optimistic);
+//        weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        if (printPath) {
+            cout << "Steps:" << endl;
+            weightedPuzzle.displayPath(args->path);
+        }
     }
 
     auto end = chrono::steady_clock::now();
@@ -508,12 +515,21 @@ void *runGrid(void *arguments) {
                 cout << "Steps:" << endl;
                 iterGrid.displayPath(args->path);
             }
-        } else if (args->algo == optimistic) {
-            WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> optiGrid(*(args->initialState), *(args->goalState), *(args->h), 2, true);
-            optiGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        } else if (args->algo == optimistic || args->algo == weightedAstar) {
+            cout << "IDA*:" << endl;
+            IteratedDeepening<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> iterGrid;
+            iterGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, true);
+            weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, false);
+            weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid<StateGrid>, HeuristicGrid> weightedGrid(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, args->algo == optimistic);
+//            weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
             if (printPath) {
                 cout << "Steps:" << endl;
-                optiGrid.displayPath(args->path);
+                weightedGrid.displayPath(args->path);
             }
         }
 

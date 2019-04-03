@@ -62,6 +62,7 @@ private:
 template <class state, class action, class environment, class heuristic>
 class WeightedAStar {
 public:
+    // constructor. b is bound; opt is true for optimistic search, false for weighted A*
     explicit WeightedAStar(state &s, state &g, heuristic &h, double b, bool opt);
     // find the path from start to goal state
     void getPath(environment &e, heuristic &h, state &s, state &g, vector<state> &path);
@@ -90,6 +91,10 @@ private:
     double bound;
     double weight;
     bool optimistic;
+    // find the path from start to goal state for optimistic search
+    void getPathOpt(environment &e, heuristic &h, state &s, state &g, vector<state> &path);
+    // find the path from start to goal state for weighted A*
+    void getPathWeighted(environment &e, heuristic &h, state &s, state &g, vector<state> &path);
 };
 
 template <class state, class action, class environment, class heuristic>
@@ -258,6 +263,7 @@ void Astar<state, action, environment, heuristic>::getPath(environment &e, heuri
                         if (tentative_gcost + EPSILON >= stateVec[search->second].gcost) {
                             continue;
                         } else {
+                            stateVec[search->second].closed = false;
                             stateVec[search->second].parent = stateVec[current.second].thisState;
                             stateVec[search->second].gcost = tentative_gcost;
                             queue.insertKey(pair<pair<double, double>, uint64_t>
@@ -328,13 +334,21 @@ WeightedAStar<state, action, environment, heuristic>::WeightedAStar(state &s, st
 template <class state, class action, class environment, class heuristic>
 void WeightedAStar<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state &s, state &g,
                                                            vector<state> &path) {
+    if (optimistic) {
+        getPathOpt(e, h, s, g, path);
+    } else {
+        getPathWeighted(e, h, s, g, path);
+    }
+}
+
+template <class state, class action, class environment, class heuristic>
+void WeightedAStar<state, action, environment, heuristic>::getPathOpt(environment &e, heuristic &h, state &s, state &g,
+                                                                       vector<state> &path) {
     // insert start state into the queue, which is at index 0 in state vector
     open.insertKey(pair<pair<double, double>, uint64_t>{{h.hCost(s, g), h.hCost(s, g)}, 0}, &stateVec, false);
     openHat.insertKey(pair<pair<double, double>, uint64_t>{{weight * h.hCost(s, g), weight * h.hCost(s, g)}, 0}, &stateVec, true);
     vector<action> actions;
     actions.reserve(26);
-    vector<state> childStates;
-    childStates.reserve(26);
     double fIncumbent = DBL_MAX;
     double fHatIncumbent = DBL_MAX;
     while (bound * open.getMin().first.first < fIncumbent) {
@@ -346,7 +360,6 @@ void WeightedAStar<state, action, environment, heuristic>::getPath(environment &
             n = open.extractMin(&stateVec, false);
             openHat.deleteElement(stateVec[n.second].locationOnOpenHat, &stateVec, true);
         }
-//        stateVec[n.second].thisState.display();
         stateVec[n.second].closed = true;
         if (stateVec[n.second].thisState == g) {
             fIncumbent = stateVec[n.second].gcost;
@@ -385,12 +398,13 @@ void WeightedAStar<state, action, environment, heuristic>::getPath(environment &
                     // duplicated in close
                     // plus epsilon to prevent small accuracies of type double's value resulting in unnecessary reopening
                     if (tentative_gcost + EPSILON < stateVec[search->second].gcost) {
+                        stateVec[search->second].closed = false;
                         stateVec[search->second].parent = stateVec[n.second].thisState;
                         stateVec[search->second].gcost = tentative_gcost;
-                        open.insertKey(pair<pair<double, double>, uint64_t>
+                        uint64_t a = open.insertKey(pair<pair<double, double>, uint64_t>
                                                 {{tentative_gcost + h.hCost(childState, g), h.hCost(childState, g)},
                                                  search->second}, &stateVec, false);
-                        openHat.insertKey(pair<pair<double, double>, uint64_t>
+                        uint64_t b = openHat.insertKey(pair<pair<double, double>, uint64_t>
                                                {{tentative_gcost + weight * h.hCost(childState, g), weight * h.hCost(childState, g)},
                                                 search->second}, &stateVec, true);
                     }
@@ -408,7 +422,6 @@ void WeightedAStar<state, action, environment, heuristic>::getPath(environment &
             }
         }
         actions.clear();
-        childStates.clear();
     }
     // found the goal state
     // record the path from goal to start
@@ -426,6 +439,89 @@ void WeightedAStar<state, action, environment, heuristic>::getPath(environment &
     }
     cout << "Cost of solution: " << fIncumbent << endl;
     cout << "Number of nodes generated: " << stateVec.size() << endl;
+}
+
+template <class state, class action, class environment, class heuristic>
+void WeightedAStar<state, action, environment, heuristic>::getPathWeighted(environment &e, heuristic &h, state &s, state &g,
+                                                           vector<state> &path) {
+
+    // insert start state into the queue, which is at index 0 in state vector
+    open.insertKey(pair<pair<double, double>, uint64_t>{{bound * h.hCost(s, g), bound * h.hCost(s, g)}, 0}, &stateVec);
+    vector<action> actions;
+    actions.reserve(26);
+    while (open.size() != 0) {
+        pair<pair<double, double>, uint64_t> current = open.extractMin(&stateVec);
+        if (stateVec[current.second].thisState == g) {
+            // found the goal state
+            // record the path from goal to start
+            path.emplace_back(g);
+            state temp = g;
+
+            while (true) {
+                uint64_t index = hashMap[temp];
+                if (stateVec[index].parent == stateVec[index].thisState) {
+                    break;
+                } else {
+                    path.emplace_back(stateVec[index].parent);
+                }
+                temp = stateVec[index].parent;
+            }
+
+            cout << "Cost of solution: " << stateVec[current.second].gcost << endl;
+            cout << "Number of nodes generated: " << stateVec.size() << endl;
+//            cout << "Number of nodes expanded: " << nodeExpanded << endl;
+//            cout << "Number of nodes in open list: " << queue.size() << endl;
+//            cout << "Number of nodes in closed list: " << nodeExpanded << endl;
+//            cout << "Number of times nodes are updated in the open list: " << nodeUpdated << endl;
+//            cout << "Number of times nodes are updated in the closed list: 0" << endl;
+
+            return;
+        }
+
+        stateVec[current.second].closed = true;
+
+//        vector<action> actions;
+        e.getActions(stateVec[current.second].thisState, actions);
+        for (auto &act : actions) {
+            // go through each child node
+            // thread's cancellation point
+            pthread_testcancel();
+            // make a copy of the current state
+            state childState = stateVec[current.second].thisState;
+            // move the childState according to action taken
+            e.applyAction(childState, act);
+            // check if this child node has been generated
+            auto search = hashMap.find(childState);
+            double tentative_gcost = stateVec[current.second].gcost + e.edgeCost(stateVec[current.second].thisState, childState);
+            if (search != hashMap.end()) {
+                // found, child node has been generated before
+                if (stateVec[search->second].closed) {
+                    // child node is in closed list
+                    continue;
+                } else {
+                    // child node is in open list
+                    if (tentative_gcost >= stateVec[search->second].gcost) {
+                        continue;
+                    } else {
+                        stateVec[search->second].parent = stateVec[current.second].thisState;
+                        stateVec[search->second].gcost = tentative_gcost;
+                        open.decreaseKey(stateVec[search->second].locationOnOpen,
+                                          pair<double, double>{tentative_gcost + bound * h.hCost(childState, g),
+                                                               bound * h.hCost(childState, g)}, &stateVec);
+                    }
+                }
+            } else {
+                // not found (newly discovered node)
+                Node childNode(childState, stateVec[current.second].thisState, tentative_gcost);
+                // add node to state vector and hash table
+                stateVec.emplace_back(childNode);
+                hashMap.emplace(childState, stateVec.size() - 1);
+                open.insertKey(pair<pair<double, double>, uint64_t>{{tentative_gcost + bound * h.hCost(childState, g),
+                                                                     bound * h.hCost(childState, g)}, stateVec.size() - 1}, &stateVec);
+            }
+        }
+        actions.clear();
+    }
 }
 
 template<class state, class action, class environment, class heuristic>
@@ -737,7 +833,8 @@ void IteratedDeepening<state, action, environment, heuristic>::getPath(environme
                                                           vector<state> &path, bool dfid) {
     bool found = false;
     bool remaining = true;
-    uint64_t nodeExpanded = 0;
+//    uint64_t nodeExpanded = 0;
+    uint64_t nodeGenerated = 0;
     double bound;
     if (dfid) {
         bound = -1;
@@ -745,11 +842,13 @@ void IteratedDeepening<state, action, environment, heuristic>::getPath(environme
         bound = h.hCost(s, g);
     }
     while (bound < DBL_MAX) {
-        bound = dls(e, h, s, s, g, 0, bound, found, remaining, nodeExpanded, path, dfid);
+//        nodeGenerated = 0;
+        bound = dls(e, h, s, s, g, 0, bound, found, remaining, nodeGenerated, path, dfid);
         if (found) {
             // reached goal state
             cout << "Cost of solution: " << bound << endl;
-            cout << "Number of nodes expanded: " << nodeExpanded << endl;
+//            cout << "Number of nodes expanded: " << nodeExpanded << endl;
+            cout << "Number of nodes generated: " << nodeGenerated << endl;
             return;
         } else if (!remaining) {
             cout << "Cannot find path." << endl;
@@ -787,7 +886,7 @@ double IteratedDeepening<state, action, environment, heuristic>::dls(environment
     bool any_remaining = false;
     vector<action> actions;
     e.getActions(current, actions);
-    nodeCount++;
+//    nodeCount++;
 
     for (auto &act : actions) {
         // go through each neighboring node
@@ -800,6 +899,7 @@ double IteratedDeepening<state, action, environment, heuristic>::dls(environment
         if (childState == parent) {
             continue;
         }
+        nodeCount++;
         double newBound;
         if (dfid) {
             newBound = dls(e, h, childState, current, g, currentVal + 1, bound, found, remaining, nodeCount, path, true);

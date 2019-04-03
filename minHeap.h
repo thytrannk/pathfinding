@@ -69,8 +69,9 @@ public:
     void clear();
 //    typename vector<pair<type, uint64_t>>::iterator getBegin();
 //    typename vector<pair<type, uint64_t>>::iterator getEnd();
-private:
     vector<pair<type, uint64_t>> heap; // pointer to array of elements in heap
+private:
+//    vector<pair<type, uint64_t>> heap; // pointer to array of elements in heap
     uint64_t heapSize; // number of elements in heap
     void swap(pair<type, uint64_t> *x, pair<type, uint64_t> *y, vector<node> *stateVec);
     void swap(pair<type, uint64_t> *x, pair<type, uint64_t> *y, vector<node> *stateVec, bool hat);
