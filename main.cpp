@@ -8,8 +8,9 @@
 #include <atomic>
 #include "puzzle.h"
 #include "grid.h"
+#include "salesman.h"
 #include "searchAlgorithm.h"
-#include "DifferentialHeuristic.h"
+//#include "DifferentialHeuristic.h"
 
 using namespace std;
 
@@ -17,10 +18,7 @@ using namespace std;
 
 enum algorithm {
     astar,
-    dijkstra,
-    dfid,
     idastar,
-    nbs,
     optimistic,
     weightedAstar,
 };
@@ -43,6 +41,15 @@ typedef struct argStructGrid {
     algorithm algo;
 } argStructGrid;
 
+typedef struct argStructSales {
+    EnvironmentSales *e;
+    HeuristicSales *h;
+    StateSales *initialState;
+    StateSales *goalState;
+    vector<StateSales> path;
+    algorithm algo;
+} argStructSales;
+
 timed_mutex mut;
 atomic_bool enter_thread;
 
@@ -52,16 +59,18 @@ bool printPath;
 
 void programPuzzle(string fileName, algorithm algo, int no_of_problems, int &failed, int &problemCount);
 void programGrid(string mapFileName, string problemFileName, algorithm algo, int no_of_problems, int &failed, int &problemCount);
+void programSales(algorithm algo, int no_of_problems, int &failed, int &problemCount);
 void *runPuzzle(void *arguments);
 void *runGrid(void *arguments);
+void *runSales(void *arguments);
 static void cleanup_handler(void *arg);
 
 void usage(char *programName) {
     cerr << "Usage: " << programName << " <problem_domain> <algorithm> <print_path>"
                                         " <input_file_1> <input_file_2> <no_of_problems>" << endl
             << "where" << endl
-            << "problem_domain: \"p\" (for sliding tile puzzle), \"v\" (for 3D voxel), or \"g\" (for 2D grid)" << endl
-            << "algorithm: \"1\" for A*, \"2\" for Dijkstra, \"3\" for DFID, \"4\" for IDA*, \"5\" for NBS, \"6\" for optimistic search, \"7\" for weighted A*" << endl
+            << "problem_domain: \"p\" (for sliding tile puzzle), \"g\" (for 2D grid), or \"s\" (for travelling salesman)" << endl
+            << "algorithm: \"1\" for A*, \"2\" for IDA*, \"3\" for optimistic search, \"4\" for weighted A*" << endl
             << "print_path: either \"y\" (to print each step once the path to the goal is found) or \"n\" (not to print path)" << endl
             << "input_file_1: the problem instance file for sliding tile puzzle; map file for 3D voxel or 2D grid" << endl
             << "input_file_2: the problem instance file for 3D voxel or 2D grid (this argument should be left blank for sliding tile puzzle)" << endl
@@ -70,7 +79,7 @@ void usage(char *programName) {
 
 int main(int argc, char **argv) {
 
-    if (argc != 6 && argc != 7) {
+    if (argc != 5 && argc != 6 && argc != 7) {
         usage(argv[0]);
         exit(EXIT_FAILURE);
     }
@@ -93,21 +102,12 @@ int main(int argc, char **argv) {
             algo = astar;
             break;
         case 2:
-            algo = dijkstra;
-            break;
-        case 3:
-            algo = dfid;
-            break;
-        case 4:
             algo = idastar;
             break;
-        case 5:
-            algo = nbs;
-            break;
-        case 6:
+        case 3:
             algo = optimistic;
             break;
-        case 7:
+        case 4:
             algo = weightedAstar;
             break;
         default:
@@ -121,6 +121,10 @@ int main(int argc, char **argv) {
 
     if (domain == "p" || domain == "P") {
         // Puzzle
+        if (argc != 6) {
+            usage(argv[0]);
+            exit(EXIT_FAILURE);
+        }
         string fileName = argv[4];
         int no_of_problems = atoi(argv[5]);
         programPuzzle(fileName, algo, no_of_problems, failed, problemCount);
@@ -134,6 +138,14 @@ int main(int argc, char **argv) {
         string problemFileName = argv[5];
         int no_of_problems = atoi(argv[6]);
         programGrid(mapFileName, problemFileName, algo, no_of_problems, failed, problemCount);
+    } else if (domain == "s" || domain == "S") {
+        // travelling salesman
+        if (argc != 5) {
+            usage(argv[0]);
+            exit(EXIT_FAILURE);
+        }
+        int no_of_problems = atoi(argv[4]);
+        programSales(algo, no_of_problems, failed, problemCount);
     } else {
         cerr << "Invalid input." << endl;
         usage(argv[0]);
@@ -162,10 +174,8 @@ void programPuzzle(string fileName, algorithm algo, int no_of_problems, int &fai
         EnvironmentPuzzle<StatePuzzle> e;
         // Manhattan distance heuristic
         vector<pair<int, vector<uint8_t>*>> h = {pair<int, vector<uint8_t>*>{0, nullptr}};
-        // zero heuristic
-        vector<pair<int, vector<uint8_t>*>> h0;
+
         HeuristicPuzzle astarHeuristic(&h);
-        HeuristicPuzzle zeroHeuristic(&h0);
 
         // read sample number
         int problemNo;
@@ -196,11 +206,7 @@ void programPuzzle(string fileName, algorithm algo, int no_of_problems, int &fai
             vector<StatePuzzle> path;
             args.path = path;
             args.algo = algo;
-            if (algo == dijkstra || algo == dfid) {
-                args.h = &zeroHeuristic;
-            } else {
-                args.h = &astarHeuristic;
-            }
+            args.h = &astarHeuristic;
 
             enter_thread = false;
 
@@ -288,12 +294,7 @@ void programGrid(string mapFileName, string problemFileName, algorithm algo, int
 
         EnvironmentGrid e(xMap, yMap, &map);
 
-        vector<vector<double>> h = vector<vector<double>>{{0}};
-        // zero heuristic
-        vector<vector<double>> h0;
-
-        HeuristicGrid astarHeuristic(h, 's', xMap, yMap);
-        HeuristicGrid zeroHeuristic(h0, 's', xMap, yMap);
+        HeuristicGrid astarHeuristic(1);
 
         // read problem file
         // ignore the first line in problem file
@@ -350,11 +351,7 @@ void programGrid(string mapFileName, string problemFileName, algorithm algo, int
             vector<StateGrid> path;
             args.path = path;
             args.algo = algo;
-            if (algo == dijkstra || algo == dfid) {
-                args.h = &zeroHeuristic;
-            } else {
-                args.h = &astarHeuristic;
-            }
+            args.h = &astarHeuristic;
 
             enter_thread = false;
 
@@ -405,6 +402,69 @@ void programGrid(string mapFileName, string problemFileName, algorithm algo, int
     }
 }
 
+void programSales(algorithm algo, int no_of_problems, int &failed, int &problemCount) {
+    EnvironmentSales e;
+    StateSales goalState(-1);
+    goalState.display();
+
+    HeuristicSales astarHeuristic(1);
+    // read sample number
+    int problemNo;
+
+    for (problemCount = 0; problemCount < no_of_problems; problemCount++) {
+        // create problem instance
+
+        // solve problem
+        StateSales initialState(1);
+        cout << "Initial state: ";
+        initialState.display();
+        argStructSales args;
+        args.e = &e;
+        args.initialState = &initialState;
+        args.goalState = &goalState;
+        vector<StateSales> path;
+        args.path = path;
+        args.algo = algo;
+        args.h = &astarHeuristic;
+
+        enter_thread = false;
+
+        // create thread to run the algorithm for that problem
+        pthread_t t;
+        void *res;
+        int s;
+        s = pthread_create(&t, nullptr, runPuzzle, (void *) &args);
+        if (s != 0) {
+            cerr << "Cannot create thread." << endl;
+            exit(EXIT_FAILURE);
+        }
+
+        while (!enter_thread) {};
+
+        if (mut.try_lock_for(duration)) {
+            // if successfully locked, remove the lock
+            mut.unlock();
+        }
+        s = pthread_cancel(t);
+        if (s != 0) {
+            cerr << "Cannot cancel thread." << endl;
+            exit(EXIT_FAILURE);
+        }
+
+        s = pthread_join(t, &res);
+        if (s != 0) {
+            cerr << "Cannot join thread." << endl;
+            exit(EXIT_FAILURE);
+        }
+        if (res == PTHREAD_CANCELED) {
+            // could not solve problem within specified duration
+            cout << "Time out." << endl;
+            failed++;
+        }
+    }
+    // has finished running a number of problems
+}
+
 void *runPuzzle(void *arguments) {
     int s;
     s = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
@@ -422,7 +482,7 @@ void *runPuzzle(void *arguments) {
     auto start = chrono::steady_clock::now();
 
     auto *args = (argStructPuzzle*) arguments;
-    if (args->algo == astar || args->algo == dijkstra) {
+    if (args->algo == astar) {
         Astar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> astarPuzzle(*(args->initialState),
                                                                                          *(args->goalState), *(args->h));
         astarPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
@@ -430,38 +490,123 @@ void *runPuzzle(void *arguments) {
             cout << "Steps:" << endl;
             astarPuzzle.displayPath(args->path);
         }
-    } else if (args->algo == nbs) {
-        NBS<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> nbsPuzzle(*(args->initialState),
-                                                                                         *(args->goalState), *(args->h));
-        nbsPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
-        if (printPath) {
-            cout << "Steps:" << endl;
-            nbsPuzzle.displayPath(args->path);
-        }
-    } else if (args->algo == dfid || args->algo == idastar) {
+    } else if (args->algo == idastar) {
         IteratedDeepening<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> iterPuzzle;
-        iterPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, args->algo == dfid);
+        iterPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
         if (printPath) {
             cout << "Steps:" << endl;
             iterPuzzle.displayPath(args->path);
         }
     } else if (args->algo == optimistic || args->algo == weightedAstar) {
-        cout << "IDA*:" << endl;
-        IteratedDeepening<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> iterPuzzle;
-        iterPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
-        cout << "Optimistic:" << endl;
-        WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, true);
-        weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
-        cout << "Weighted A*:" << endl;
-        WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, false);
-        weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
-        
+        if (true) {
+            cout << "Bound 2.0:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 2, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 2, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+        if (true) {
+            cout << "Bound 1.8:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.8, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.8, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+        if (true) {
+            cout << "Bound 1.7:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.7, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.7, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+        if (true) {
+            cout << "Bound 1.6:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.6, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.6, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+        if (true) {
+            cout << "Bound 1.5:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.5, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.5, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+        if (true) {
+            cout << "Bound 1.4:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.4, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.4, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+
+        if (true) {
+            cout << "Bound 1.3:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.3, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.3, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+
+        if (true) {
+            cout << "Bound 1.2:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.2, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.2, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+
+        if (true) {
+            cout << "Bound 1.1:" << endl;
+            cout << "Optimistic:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.1, true);
+            weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            cout << "Weighted A*:" << endl;
+            WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle2(
+                    *(args->initialState), *(args->goalState), *(args->h), 1.1, false);
+            weightedPuzzle2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+        }
+
 //        WeightedAStar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> weightedPuzzle(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, args->algo == optimistic);
 //        weightedPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
-        if (printPath) {
-            cout << "Steps:" << endl;
-            weightedPuzzle.displayPath(args->path);
-        }
+//        if (printPath) {
+//            cout << "Steps:" << endl;
+//            weightedPuzzle.displayPath(args->path);
+//        }
     }
 
     auto end = chrono::steady_clock::now();
@@ -492,7 +637,7 @@ void *runGrid(void *arguments) {
         auto start = chrono::steady_clock::now();
 
         auto *args = (argStructGrid*) arguments;
-        if (args->algo == astar || args->algo == dijkstra) {
+        if (args->algo == astar) {
             Astar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> astarGrid(*(args->initialState),
                                                                                         *(args->goalState), *(args->h));
             astarGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
@@ -500,37 +645,302 @@ void *runGrid(void *arguments) {
                 cout << "Steps:" << endl;
                 astarGrid.displayPath(args->path);
             }
-        } else if (args->algo == nbs) {
-            NBS<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> nbsGrid(*(args->initialState),
-                                                                                    *(args->goalState), *(args->h));
-            nbsGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
-            if (printPath) {
-                cout << "Steps:" << endl;
-                nbsGrid.displayPath(args->path);
-            }
-        } else if (args->algo == dfid || args->algo == idastar) {
+        } else if (args->algo == idastar) {
             IteratedDeepening<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> iterGrid;
-            iterGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, args->algo == dfid);
+            iterGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
             if (printPath) {
                 cout << "Steps:" << endl;
                 iterGrid.displayPath(args->path);
             }
         } else if (args->algo == optimistic || args->algo == weightedAstar) {
-            cout << "IDA*:" << endl;
-            IteratedDeepening<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> iterGrid;
-            iterGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
-            cout << "Optimistic:" << endl;
-            WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, true);
-            weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
-            cout << "Weighted A*:" << endl;
-            WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, false);
-            weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            if (true) {
+                cout << "Bound 2.0:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  2,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 2, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+            if (true) {
+                cout << "Bound 1.8:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  1.8,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 1.8, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+            if (true) {
+                cout << "Bound 1,7:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  1.7,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 1.7, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+            if (true) {
+                cout << "Bound 1.6:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  1.6,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 1.6, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+            if (true) {
+                cout << "Bound 1.5:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  1.5,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 1.5, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+            if (true) {
+                cout << "Bound 1.4:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  1.4,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 1.4, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+            if (true) {
+                cout << "Bound 1.3:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  1.3,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 1.3, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+            if (true) {
+                cout << "Bound 1.2:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  1.2,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 1.2, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+            if (true) {
+                cout << "Bound 1.1:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
+                                                                                                  *(args->goalState),
+                                                                                                  *(args->h),
+                                                                                                  1.1,
+                                                                                                  true);
+                weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid2(
+                        *(args->initialState), *(args->goalState), *(args->h), 1.1, false);
+                weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
 //            WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid<StateGrid>, HeuristicGrid> weightedGrid(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, args->algo == optimistic);
 //            weightedGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            if (printPath) {
+//                cout << "Steps:" << endl;
+//                weightedGrid.displayPath(args->path);
+//            }
+        }
+
+        auto end = chrono::steady_clock::now();
+
+        cout << "Solved in " << chrono::duration_cast<chrono::seconds>(end - start).count() << "s." << endl;
+
+        mut.unlock();
+
+    pthread_cleanup_pop(0);
+
+    return nullptr;
+}
+
+void *runSales(void *arguments) {
+    int s;
+    s = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, nullptr);
+    // ensure mutex is unlocked if time out
+    pthread_cleanup_push(cleanup_handler, nullptr);
+
+        if (s != 0) {
+            cerr << "Cannot set cancel state for thread." << endl;
+            exit(EXIT_FAILURE);
+        }
+
+        mut.lock();
+        enter_thread = true;
+
+        auto start = chrono::steady_clock::now();
+
+        auto *args = (argStructSales*) arguments;
+        if (args->algo == astar) {
+            cout << "before getpath" << endl;
+            Astar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> astarSales(*(args->initialState),
+                                                                                                          *(args->goalState), *(args->h));
+            astarSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
             if (printPath) {
                 cout << "Steps:" << endl;
-                weightedGrid.displayPath(args->path);
+                astarSales.displayPath(args->path);
             }
+        } else if (args->algo == idastar) {
+            IteratedDeepening<StateSales, ActionSales, EnvironmentSales, HeuristicSales> iterSales;
+            iterSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
+            if (printPath) {
+                cout << "Steps:" << endl;
+                iterSales.displayPath(args->path);
+            }
+        } else if (args->algo == optimistic || args->algo == weightedAstar) {
+            if (true) {
+                cout << "Bound 2.0:" << endl;
+                cout << "Optimistic:" << endl;
+                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+                        *(args->initialState), *(args->goalState), *(args->h), 2, true);
+                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+                cout << "Weighted A*:" << endl;
+                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+                        *(args->initialState), *(args->goalState), *(args->h), 2, false);
+                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+            }
+//            if (true) {
+//                cout << "Bound 1.8:" << endl;
+//                cout << "Optimistic:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.8, true);
+//                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//                cout << "Weighted A*:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.8, false);
+//                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            }
+//            if (true) {
+//                cout << "Bound 1.7:" << endl;
+//                cout << "Optimistic:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.7, true);
+//                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//                cout << "Weighted A*:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.7, false);
+//                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            }
+//            if (true) {
+//                cout << "Bound 1.6:" << endl;
+//                cout << "Optimistic:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.6, true);
+//                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//                cout << "Weighted A*:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.6, false);
+//                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            }
+//            if (true) {
+//                cout << "Bound 1.5:" << endl;
+//                cout << "Optimistic:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.5, true);
+//                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//                cout << "Weighted A*:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.5, false);
+//                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            }
+//            if (true) {
+//                cout << "Bound 1.4:" << endl;
+//                cout << "Optimistic:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.4, true);
+//                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//                cout << "Weighted A*:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.4, false);
+//                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            }
+//
+//            if (true) {
+//                cout << "Bound 1.3:" << endl;
+//                cout << "Optimistic:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.3, true);
+//                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//                cout << "Weighted A*:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.3, false);
+//                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            }
+//
+//            if (true) {
+//                cout << "Bound 1.2:" << endl;
+//                cout << "Optimistic:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.2, true);
+//                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//                cout << "Weighted A*:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.2, false);
+//                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            }
+//
+//            if (true) {
+//                cout << "Bound 1.1:" << endl;
+//                cout << "Optimistic:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.1, true);
+//                weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//                cout << "Weighted A*:" << endl;
+//                WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales2(
+//                        *(args->initialState), *(args->goalState), *(args->h), 1.1, false);
+//                weightedSales2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//            }
+
+//        WeightedAStar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> weightedSales(*(args->initialState), *(args->goalState), *(args->h), SUBOPTIMAL_BOUND, args->algo == optimistic);
+//        weightedSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
+//        if (printPath) {
+//            cout << "Steps:" << endl;
+//            weightedSales.displayPath(args->path);
+//        }
         }
 
         auto end = chrono::steady_clock::now();

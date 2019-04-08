@@ -96,19 +96,15 @@ public:
     // constructor. Takes in a vector of heuristic.
     // For zero heuristic (Dijkstra's algorithm), pass in an empty vector
     // If only use default grid heuristic without any differential heuristic, pass in vector<vector<double>>{{0}}
-    explicit HeuristicGrid(vector<vector<double>> list, char lookupChar, int x, int y);
+    explicit HeuristicGrid(int heuristic);
     // returns the hcost between two states
     // this is the max hcost of all the heuristics in *hList
     double hCost(StateGrid &node1, StateGrid &node2);
     // return if heuristic is consistent
     bool isConsistent();
 private:
-    // vector of all differential heuristic vectors
-    vector<vector<double>> hList;
-    // lookup strategy
-    char lookup;
-    // dimensions of the map
-    int xMap, yMap;
+    // h == 0 for zero heuristic; h == 1 for default heuristic
+    int h;
 };
 
 #endif //ASSIGNMENT4_GRID_H

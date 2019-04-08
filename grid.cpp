@@ -276,16 +276,13 @@ void EnvironmentGrid::getLength(int &x, int &y, int &z) {
 //    return distance(deltaX, deltaY);
 //}
 
-HeuristicGrid::HeuristicGrid(vector<vector<double>> list, char lookupChar, int x, int y) {
-    hList = list;
-    lookup = lookupChar;
-    xMap = x;
-    yMap = y;
+HeuristicGrid::HeuristicGrid(int heuristic) {
+    h = heuristic;
 }
 
 double HeuristicGrid::hCost(StateGrid &node1, StateGrid &node2) {
     double ret = 0;
-    if (hList.empty()) {
+    if (h == 0) {
         // zero heuristic, used for Dijkstra algorithm
         return ret;
     }
@@ -293,48 +290,9 @@ double HeuristicGrid::hCost(StateGrid &node1, StateGrid &node2) {
     int deltaX = abs(node1.getValue(0) - node2.getValue(0));
     int deltaY = abs(node1.getValue(1) - node2.getValue(1));
     ret = distance(deltaX, deltaY);
-    if (hList.size() == 1) {
-        if (hList[0].size() == 1) {
-            // only use default grid heuristic
-            return ret;
-        }
-    }
-    unsigned long index1 = (unsigned long) node1.getValue(1) * xMap + node1.getValue(0);
-    unsigned long index2 = (unsigned long) node2.getValue(1) * xMap + node2.getValue(0);
-    if (lookup == 'm') {
-        // Maximum of all heuristic
-        for (auto &vec : hList) {
-            double temp = abs(vec[index1] - vec[index2]);
-            if (temp > ret) {
-                ret = temp;
-            }
-        }
-    } else if (lookup == 's') {
-        // Look up from one heuristic only
-        auto vec = hList[0];
-        double temp = abs(vec[index1] - vec[index2]);
-        if (temp > ret) {
-            ret = temp;
-        }
-    } else {
-        // Random heuristic from the list
-        random_device dev;
-        mt19937 rng(dev());
-        uniform_int_distribution<mt19937::result_type> rand(0, (unsigned int) hList.size() - 1);
-        int indexH = rand(rng);
-        auto vec = hList[indexH];
-        double temp = abs(vec[index1] - vec[index2]);
-        if (temp > ret) {
-            ret = temp;
-        }
-    }
     return ret;
 }
 
 bool HeuristicGrid::isConsistent() {
-    if (lookup == 'r') {
-        return false;
-    } else {
-        return true;
-    }
+    return true;
 }
