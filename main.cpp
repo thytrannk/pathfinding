@@ -404,12 +404,11 @@ void programGrid(string mapFileName, string problemFileName, algorithm algo, int
 
 void programSales(algorithm algo, int no_of_problems, int &failed, int &problemCount) {
 
-    StateSales goalState(-1);
-
     for (problemCount = 0; problemCount < no_of_problems; problemCount++) {
         // create problem instance
         EnvironmentSales e;
         HeuristicSales astarHeuristic(1, e);
+        StateSales goalState(-1);
 
         // solve problem
         StateSales initialState(1);
