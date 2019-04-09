@@ -5,6 +5,7 @@
 #include "salesman.h"
 #include <iostream>
 #include <random>
+#include <algorithm>
 
 #define NO_CITIES 12
 
@@ -177,6 +178,15 @@ vector<vector<double>> EnvironmentSales::getMap() {
 HeuristicSales::HeuristicSales(int heuristic, EnvironmentSales environment) {
     h = heuristic;
     e = environment;
+    vector<vector<double>> map = e.getMap();
+    for (int i = 0; i < e.getNoCities(); i++) {
+        for (int j = i + 1; j < e.getNoCities(); j++) {
+            double dist = sqrt((map[i][0] - map[j][0]) * (map[i][0] - map[j][0]) + (map[i][1] - map[j][1]) * (map[i][1] - map[j][1]));
+            edgeList.emplace_back(pair<double, int>{dist, i * e.getNoCities() + j});
+        }
+
+    }
+    sort(edgeList.begin(), edgeList.end());
 }
 
 double HeuristicSales::hCost(StateSales &node1, StateSales &node2) {
@@ -216,31 +226,27 @@ double HeuristicSales::hCost(StateSales &node1, StateSales &node2) {
         // add origin to the list of cities to be visited
         unvisited.emplace_back(0);
     }
+
     int size = unvisited.size();
     vector<int> covered{unvisited[size - 1]};
     unvisited.pop_back();
-    vector<vector<double>> map = e.getMap();
     while (covered.size() < size) {
-        double min = 10; // edge cost in unit square is < 10
-        int minCity;
-        int indexMin;
-        for (int i : covered) {
-            for (int x = 0; x < unvisited.size(); x++) {
-                int j = unvisited[x];
-                double dist = sqrt((map[i][0] - map[j][0]) * (map[i][0] - map[j][0]) + (map[i][1] - map[j][1]) * (map[i][1] - map[j][1]));
-                if (dist < min) {
-                    min = dist;
-                    minCity = j;
-                    indexMin = x;
+        for (auto &edge : edgeList) {
+            int u = edge.second % e.getNoCities();
+            int v = edge.second / e.getNoCities();
+            auto find1 = find(unvisited.begin(), unvisited.end(), u);
+            if (find1 != unvisited.end()) {
+                // u is in unvisited
+                auto find2 = find(covered.begin(), covered.end(), v);
+                if (find2 != covered.end()) {
+                    // v is in covered
+                    covered.emplace_back(u);
+                    unvisited.erase(find1);
+                    ret += edge.first;
+                    break;
                 }
             }
-
         }
-        covered.emplace_back(minCity);
-        auto it = unvisited.begin();
-        advance(it, indexMin);
-        unvisited.erase(it);
-        ret += min;
     }
     return ret;
 }

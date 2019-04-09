@@ -107,6 +107,8 @@ private:
     // h == 0 for zero heuristic; h == 1 for default heuristic
     int h;
     EnvironmentSales e;
+    // priority queue of all edges from small to large
+    vector<pair<double, int>> edgeList;
 };
 
 #endif //PROJECT_SALESMAN_H
