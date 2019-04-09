@@ -83,6 +83,8 @@ public:
 //    void placeRandom(int n, vector<int> &coor, vector<int> &exclude);
     // return number of cities
     int getNoCities();
+    // return map
+    vector<vector<double>> getMap();
 //    bool UndoAction(StateSales &s, ActionSales a);
 //    uint64_t GetStateHash(StateSales &node);
 private:
@@ -95,7 +97,7 @@ public:
     // constructor. Takes in a vector of heuristic.
     // For zero heuristic (Dijkstra's algorithm), pass in an empty vector
     // If only use default Sales heuristic without any differential heuristic, pass in vector<vector<double>>{{0}}
-    explicit HeuristicSales(int heuristic);
+    explicit HeuristicSales(int heuristic, EnvironmentSales environment);
     // returns the hcost between two states
     // this is the max hcost of all the heuristics in *hList
     double hCost(StateSales &node1, StateSales &node2);
@@ -104,6 +106,7 @@ public:
 private:
     // h == 0 for zero heuristic; h == 1 for default heuristic
     int h;
+    EnvironmentSales e;
 };
 
 #endif //PROJECT_SALESMAN_H

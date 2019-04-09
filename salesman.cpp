@@ -6,7 +6,7 @@
 #include <iostream>
 #include <random>
 
-#define NO_CITIES 5
+#define NO_CITIES 12
 
 StateSales::StateSales(int id) {
     // id == 0: empty state (all 0)
@@ -170,8 +170,13 @@ int EnvironmentSales::getNoCities() {
     return map.size();
 }
 
-HeuristicSales::HeuristicSales(int heuristic) {
+vector<vector<double>> EnvironmentSales::getMap() {
+    return map;
+}
+
+HeuristicSales::HeuristicSales(int heuristic, EnvironmentSales environment) {
     h = heuristic;
+    e = environment;
 }
 
 double HeuristicSales::hCost(StateSales &node1, StateSales &node2) {
@@ -179,6 +184,63 @@ double HeuristicSales::hCost(StateSales &node1, StateSales &node2) {
     if (h == 0) {
         // zero heuristic, used for Dijkstra algorithm
         return ret;
+    }
+    // return minimum spanning tree heuristic (Prim's algorithm)
+    // get list of cities that haven't been visited
+    string id = node1.getStateID();
+    vector<int> unvisited;
+    for (int i = 0; i < NO_CITIES; i++) {
+        bool flag = true; // whether cities is unvisited
+        for (char j : id) {
+            if (j == 'A' + i) {
+                flag = false;
+                break;
+            } else if (j == '0') {
+                break;
+            }
+        }
+        if (flag) {
+            unvisited.emplace_back(i);
+        }
+    }
+    // add the last visited city to the list
+    int lastVisited;
+    for (lastVisited = 0; lastVisited < id.size(); lastVisited++) {
+        if (id[lastVisited] == '0') {
+            break;
+        }
+    }
+    lastVisited--;
+    unvisited.emplace_back(id[lastVisited] - 'A');
+    if (id[lastVisited] != 'A') {
+        // add origin to the list of cities to be visited
+        unvisited.emplace_back(0);
+    }
+    int size = unvisited.size();
+    vector<int> covered{unvisited[size - 1]};
+    unvisited.pop_back();
+    vector<vector<double>> map = e.getMap();
+    while (covered.size() < size) {
+        double min = 10; // edge cost in unit square is < 10
+        int minCity;
+        int indexMin;
+        for (int i : covered) {
+            for (int x = 0; x < unvisited.size(); x++) {
+                int j = unvisited[x];
+                double dist = sqrt((map[i][0] - map[j][0]) * (map[i][0] - map[j][0]) + (map[i][1] - map[j][1]) * (map[i][1] - map[j][1]));
+                if (dist < min) {
+                    min = dist;
+                    minCity = j;
+                    indexMin = x;
+                }
+            }
+
+        }
+        covered.emplace_back(minCity);
+        auto it = unvisited.begin();
+        advance(it, indexMin);
+        unvisited.erase(it);
+        ret += min;
     }
     return ret;
 }

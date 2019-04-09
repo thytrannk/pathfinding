@@ -403,18 +403,17 @@ void programGrid(string mapFileName, string problemFileName, algorithm algo, int
 }
 
 void programSales(algorithm algo, int no_of_problems, int &failed, int &problemCount) {
-    EnvironmentSales e;
-    StateSales goalState(-1);
 
-    HeuristicSales astarHeuristic(1);
-    // read sample number
-    int problemNo;
+    StateSales goalState(-1);
 
     for (problemCount = 0; problemCount < no_of_problems; problemCount++) {
         // create problem instance
+        EnvironmentSales e;
+        HeuristicSales astarHeuristic(1, e);
 
         // solve problem
         StateSales initialState(1);
+        cout << endl << "Problem " << problemCount + 1 << endl;
 //        cout << "Initial state: ";
 //        initialState.display();
         argStructSales args;
@@ -829,6 +828,9 @@ void *runSales(void *arguments) {
             iterSales.displayPath(args->path, true);
         }
     } else if (args->algo == optimistic || args->algo == weightedAstar) {
+        Astar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> astarSales(*(args->initialState),
+                                                                                    *(args->goalState), *(args->h));
+        astarSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
         if (true) {
             cout << "Bound 2.0:" << endl;
             cout << "Optimistic:" << endl;
