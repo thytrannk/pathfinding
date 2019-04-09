@@ -6,7 +6,7 @@
 #include <iostream>
 #include <random>
 
-#define NO_CITIES 2
+#define NO_CITIES 5
 
 StateSales::StateSales(int id) {
     // id == 0: empty state (all 0)

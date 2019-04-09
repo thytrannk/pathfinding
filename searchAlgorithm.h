@@ -37,7 +37,7 @@ public:
     // find the path from start to goal state
     void getPath(environment &e, heuristic &h, state &s, state &g, vector<state> &path);
     // print out the path from start to goal state if found
-    void displayPath(vector<state> &path);
+    void displayPath(vector<state> &path, bool sales);
 private:
     typedef struct node {
         state thisState;
@@ -67,7 +67,7 @@ public:
     // find the path from start to goal state
     void getPath(environment &e, heuristic &h, state &s, state &g, vector<state> &path);
     // print out the path from start to goal state if found
-    void displayPath(vector<state> &path);
+    void displayPath(vector<state> &path, bool sales);
 private:
     typedef struct node {
         state thisState;
@@ -103,7 +103,7 @@ public:
     // find the path from start to goal state
     void getPath(environment &e, heuristic &h, state &s, state &g, vector<state> &path, bool dfid);
     // print out the path from start to goal state if found
-    void displayPath(vector<state> &path);
+    void displayPath(vector<state> &path, bool sales);
 private:
     // depth limited search
     double dls(environment &e, heuristic &h, state &current, state &parent, state &g,
@@ -136,8 +136,8 @@ void Astar<state, action, environment, heuristic>::getPath(environment &e, heuri
         if (stateVec[current.second].thisState == g) {
             // found the goal state
             // record the path from goal to start
-            path.emplace_back(g);
-            state temp = g;
+            path.emplace_back(stateVec[current.second].thisState);
+            state temp = stateVec[current.second].thisState;
 
             while (true) {
                 uint64_t index = hashMap[temp];
@@ -258,9 +258,13 @@ void Astar<state, action, environment, heuristic>::getPath(environment &e, heuri
 }
 
 template<class state, class action, class environment, class heuristic>
-void Astar<state, action, environment, heuristic>::displayPath(vector<state> &path) {
-    for (typename vector<state>::reverse_iterator it = path.rbegin(); it != path.rend(); it++) {
-        it->display();
+void Astar<state, action, environment, heuristic>::displayPath(vector<state> &path, bool sales) {
+    if (!sales) {
+        for (typename vector<state>::reverse_iterator it = path.rbegin(); it != path.rend(); it++) {
+            it->display();
+        }
+    } else {
+        path[0].display();
     }
 }
 
@@ -309,6 +313,7 @@ void WeightedAStar<state, action, environment, heuristic>::getPathOpt(environmen
         }
         stateVec[n.second].closed = true;
         if (stateVec[n.second].thisState == g) {
+            g = stateVec[n.second].thisState;
             fIncumbent = stateVec[n.second].gcost;
             fHatIncumbent = stateVec[n.second].gcost;
 
@@ -401,8 +406,8 @@ void WeightedAStar<state, action, environment, heuristic>::getPathWeighted(envir
         if (stateVec[current.second].thisState == g) {
             // found the goal state
             // record the path from goal to start
-            path.emplace_back(g);
-            state temp = g;
+            path.emplace_back(stateVec[current.second].thisState);
+            state temp = stateVec[current.second].thisState;
 
             while (true) {
                 uint64_t index = hashMap[temp];
@@ -472,9 +477,12 @@ void WeightedAStar<state, action, environment, heuristic>::getPathWeighted(envir
 }
 
 template<class state, class action, class environment, class heuristic>
-void WeightedAStar<state, action, environment, heuristic>::displayPath(vector<state> &path) {
+void WeightedAStar<state, action, environment, heuristic>::displayPath(vector<state> &path, bool sales) {    if (!sales) {
     for (typename vector<state>::reverse_iterator it = path.rbegin(); it != path.rend(); it++) {
-        it->display();
+            it->display();
+        }
+    } else {
+        path[0].display();
     }
 }
 
@@ -579,9 +587,13 @@ double IteratedDeepening<state, action, environment, heuristic>::dls(environment
 }
 
 template<class state, class action, class environment, class heuristic>
-void IteratedDeepening<state, action, environment, heuristic>::displayPath(vector<state> &path) {
-    for (typename vector<state>::reverse_iterator it = path.rbegin(); it != path.rend(); it++) {
-        it->display();
+void IteratedDeepening<state, action, environment, heuristic>::displayPath(vector<state> &path, bool sales) {
+    if (!sales) {
+        for (typename vector<state>::reverse_iterator it = path.rbegin(); it != path.rend(); it++) {
+            it->display();
+        }
+    } else {
+        path[0].display();
     }
 }
 
