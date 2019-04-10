@@ -33,9 +33,9 @@ namespace std {
 template <class state, class action, class environment, class heuristic>
 class Astar {
 public:
-    explicit Astar(state &s, state &g, heuristic &h);
+    explicit Astar(state s, state g, heuristic &h);
     // find the path from start to goal state
-    void getPath(environment &e, heuristic &h, state &s, state &g, vector<state> &path);
+    void getPath(environment &e, heuristic &h, state s, state g, vector<state> &path);
     // print out the path from start to goal state if found
     void displayPath(vector<state> &path, bool sales);
 private:
@@ -63,9 +63,9 @@ template <class state, class action, class environment, class heuristic>
 class WeightedAStar {
 public:
     // constructor. b is bound; opt is true for optimistic search, false for weighted A*
-    explicit WeightedAStar(state &s, state &g, heuristic &h, double b, bool opt);
+    explicit WeightedAStar(state s, state g, heuristic &h, double b, bool opt);
     // find the path from start to goal state
-    void getPath(environment &e, heuristic &h, state &s, state &g, vector<state> &path);
+    void getPath(environment &e, heuristic &h, state s, state g, vector<state> &path);
     // print out the path from start to goal state if found
     void displayPath(vector<state> &path, bool sales);
 private:
@@ -101,7 +101,7 @@ template <class state, class action, class environment, class heuristic>
 class IteratedDeepening {
 public:
     // find the path from start to goal state
-    void getPath(environment &e, heuristic &h, state &s, state &g, vector<state> &path, bool dfid);
+    void getPath(environment &e, heuristic &h, state s, state g, vector<state> &path, bool dfid);
     // print out the path from start to goal state if found
     void displayPath(vector<state> &path, bool sales);
 private:
@@ -113,14 +113,14 @@ private:
 
 
 template<class state, class action, class environment, class heuristic>
-Astar<state, action, environment, heuristic>::Astar(state &s, state &g, heuristic &h) {
+Astar<state, action, environment, heuristic>::Astar(state s, state g, heuristic &h) {
     Node init(s, s, 0, h.hCost(s, g));
     hashMap.emplace(s, 0);
     stateVec.emplace_back(init);
 }
 
 template <class state, class action, class environment, class heuristic>
-void Astar<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state &s, state &g,
+void Astar<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state s, state g,
                                                            vector<state> &path) {
     uint64_t nodeExpanded = 0;
     uint64_t nodeUpdated = 0;
@@ -269,7 +269,7 @@ void Astar<state, action, environment, heuristic>::displayPath(vector<state> &pa
 }
 
 template<class state, class action, class environment, class heuristic>
-WeightedAStar<state, action, environment, heuristic>::WeightedAStar(state &s, state &g, heuristic &h, double b, bool opt) {
+WeightedAStar<state, action, environment, heuristic>::WeightedAStar(state s, state g, heuristic &h, double b, bool opt) {
     bound = b;
     optimistic = opt;
     if (opt) {
@@ -283,7 +283,7 @@ WeightedAStar<state, action, environment, heuristic>::WeightedAStar(state &s, st
 }
 
 template <class state, class action, class environment, class heuristic>
-void WeightedAStar<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state &s, state &g,
+void WeightedAStar<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state s, state g,
                                                            vector<state> &path) {
     if (optimistic) {
         getPathOpt(e, h, s, g, path);
@@ -487,7 +487,7 @@ void WeightedAStar<state, action, environment, heuristic>::displayPath(vector<st
 }
 
 template <class state, class action, class environment, class heuristic>
-void IteratedDeepening<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state &s, state &g,
+void IteratedDeepening<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state s, state g,
                                                           vector<state> &path, bool dfid) {
     bool found = false;
     bool remaining = true;
