@@ -10,6 +10,5 @@ add_executable(project main.cpp searchAlgorithm.h
         puzzle.cpp puzzle.h puzzlePDB.cpp puzzlePDB.h
         minHeap.h util.cpp util.h grid.cpp grid.h salesman.cpp salesman.h)
 add_executable(parsing output-parsing.cpp util.cpp util.h)
-add_executable(pdb pdb.cpp pdb.h puzzlePDB.cpp puzzlePDB.h puzzle.cpp puzzle.h util.cpp util.h)
 
 target_link_libraries(project Threads::Threads)
