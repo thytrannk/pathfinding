@@ -679,7 +679,7 @@ void *runGrid(void *arguments) {
             weightedGrid2.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
         }
         if (true) {
-            cout << "Bound 1,7:" << endl;
+            cout << "Bound 1.7:" << endl;
             cout << "Optimistic:" << endl;
             WeightedAStar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> weightedGrid(*(args->initialState),
                                                                                               *(args->goalState),
