@@ -72,8 +72,8 @@ void usage(char *programName) {
             << "problem_domain: \"p\" (for sliding tile puzzle), \"g\" (for 2D grid), or \"s\" (for travelling salesman)" << endl
             << "algorithm: \"1\" for A*, \"2\" for IDA*, \"3\" for optimistic search, \"4\" for weighted A*" << endl
             << "print_path: either \"y\" (to print each step once the path to the goal is found) or \"n\" (not to print path)" << endl
-            << "input_file_1: the problem instance file for sliding tile puzzle; map file for 3D voxel or 2D grid" << endl
-            << "input_file_2: the problem instance file for 3D voxel or 2D grid (this argument should be left blank for sliding tile puzzle)" << endl
+            << "input_file_1: the problem instance file for sliding tile puzzle; map file for 2D grid  (this argument should be left blank for travelling salesman)" << endl
+            << "input_file_2: the problem instance file for 2D grid (this argument should be left blank for sliding tile puzzle and travelling salesman)" << endl
             << "no_of_problems: maximum number of problems to solve" << endl;
 }
 
