@@ -1,3 +1,7 @@
+# Pathfinding algorithms
+
+This is an implementation of 
+
 How to build the program:
     cmake -S <path-to-source> -B <path-to-build>
     cd <path-to-build>
@@ -9,7 +13,7 @@ How to run the code:
     ./project <problem_domain> <algorithm> <print_path> <input_file_1> <input_file_2> <no_of_problems> <placement_strategy> <lookup_strategy>
     where
         problem_domain: "p" (for sliding tile puzzle), "g" (for 2D grid), or "s" (for travelling salesman)
-        algorithm: "1" for A*, "2" for IDA*, "3" for optimistic search, "4" for weighted A*
+        algorithm: "1" for A*, "2" for Dijkstra, "3" for IDA*, "4" for optimistic search, "5" for weighted A*, "6" for NBS
         print_path: either "y" (to print each step once the path to the goal is found) or "n" (not to print path)
         input_file_1: the problem instance file for sliding tile puzzle; map file for 2D grid (this argument should be left blank for travelling salesman)
         input_file_2: the problem instance file for 2D grid (this argument should be left blank for sliding tile puzzle and travelling salesman)

@@ -101,16 +101,68 @@ template <class state, class action, class environment, class heuristic>
 class IteratedDeepening {
 public:
     // find the path from start to goal state
-    void getPath(environment &e, heuristic &h, state s, state g, vector<state> &path, bool dfid);
+    void getPath(environment &e, heuristic &h, state s, state g, vector<state> &path);
     // print out the path from start to goal state if found
     void displayPath(vector<state> &path, bool sales);
 private:
     // depth limited search
     double dls(environment &e, heuristic &h, state &current, state &parent, state &g,
             double currentVal, double bound, bool &found, bool &remaining,
-            uint64_t &nodeCount, std::vector<state> &path, bool dfid);
+            uint64_t &nodeCount, std::vector<state> &path);
 };
 
+template <class state, class action, class environment, class heuristic>
+class NBS {
+public:
+    explicit NBS(state &s, state &g, heuristic &h);
+    ~NBS();
+    // find the path from start to goal state
+    void getPath(environment &e, heuristic &h, state &s, state &g, vector<state> &path);
+    // print out the path from start to goal state if found
+    void displayPath(vector<state> &path);
+private:
+    typedef struct node {
+        state thisState;
+        state parentF;
+        state parentB;
+        bool closedF = false;
+        bool closedB = false;
+        double gcostF = DBL_MAX;
+        double gcostB = DBL_MAX;
+        uint64_t locationOnWaitingF = UINT64_MAX;
+        uint64_t locationOnWaitingB = UINT64_MAX;
+        uint64_t locationOnReadyF = UINT64_MAX;
+        uint64_t locationOnReadyB = UINT64_MAX;
+        node(state s, state pF, state pB, bool isClosedF, bool isClosedB, double costF, double costB,
+             uint64_t locationWaitingF, uint64_t locationWaitingB, uint64_t locationReadyF, uint64_t locationReadyB)
+                : thisState(s), parentF(pF), parentB(pB), closedF(isClosedF), closedB(isClosedB), gcostF(costF), gcostB(costB),
+                  locationOnWaitingF(locationWaitingF), locationOnWaitingB(locationWaitingB),
+                  locationOnReadyF(locationReadyF), locationOnReadyB(locationReadyB) {}
+        node(state s, state pF, state pB, double costF, double costB) : node(s, pF, pB, false, false, costF, costB, UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX) {}
+        node(state s, state pF, state pB) : node(s, pF, pB, DBL_MAX, DBL_MAX) {}
+        node(state s) : node(s, s, s) {}
+    } Node;
+    // hash map of states and index in state vector
+    unordered_map<state, uint64_t> hashMap;
+    // priority queue of waiting lists with key being pair<f-cost, h-cost>
+    MinHeap<pair<double, double>, Node> waitingF;
+    MinHeap<pair<double, double>, Node> waitingB;
+    // priority queue of ready lists with key being g-cost
+    MinHeap<double, Node> readyF;
+    MinHeap<double, Node> readyB;
+    // state vector
+    vector<Node> stateVec;
+    // lower bound of C
+    double clb;
+    // meeting state between forward and backward search
+    state *meetingPt = nullptr;
+    // select best pair from open list
+    bool prepareBest();
+    // expand node
+    void expand(environment &e, heuristic &h, state &s, state &g, vector<action> &actions, uint64_t locationVec,
+                bool forward, double &c, uint64_t &nodeUpdatedOpen, uint64_t &nodeUpdatedClosed);
+
+};
 
 template<class state, class action, class environment, class heuristic>
 Astar<state, action, environment, heuristic>::Astar(state s, state g, heuristic &h) {
@@ -488,20 +540,15 @@ void WeightedAStar<state, action, environment, heuristic>::displayPath(vector<st
 
 template <class state, class action, class environment, class heuristic>
 void IteratedDeepening<state, action, environment, heuristic>::getPath(environment &e, heuristic &h, state s, state g,
-                                                          vector<state> &path, bool dfid) {
+                                                          vector<state> &path) {
     bool found = false;
     bool remaining = true;
 //    uint64_t nodeExpanded = 0;
     uint64_t nodeGenerated = 0;
-    double bound;
-    if (dfid) {
-        bound = -1;
-    } else { // IDAstar
-        bound = h.hCost(s, g);
-    }
+    double bound = h.hCost(s, g);
     while (bound < DBL_MAX) {
 //        nodeGenerated = 0;
-        bound = dls(e, h, s, s, g, 0, bound, found, remaining, nodeGenerated, path, dfid);
+        bound = dls(e, h, s, s, g, 0, bound, found, remaining, nodeGenerated, path);
         if (found) {
             // reached goal state
             cout << "Cost of solution: " << bound << endl;
@@ -519,23 +566,13 @@ void IteratedDeepening<state, action, environment, heuristic>::getPath(environme
 template<class state, class action, class environment, class heuristic>
 double IteratedDeepening<state, action, environment, heuristic>::dls(environment &e, heuristic &h,
         state &current, state &parent, state &g, double currentVal, double bound, bool &found, bool &remaining,
-        uint64_t &nodeCount, std::vector<state> &path, bool dfid) {
-    double value;
-    if (dfid) {
-        value = currentVal;
-    } else {
-        value = currentVal + h.hCost(current, g);
-    }
-    if (value > bound || (!dfid && value == bound)) {
+        uint64_t &nodeCount, std::vector<state> &path) {
+    double value = currentVal + h.hCost(current, g);
+    if (value >= bound) {
         if (current == g) {
             // found goal state
             path.emplace_back(current);
             found = true;
-            return value;
-        } else if (value > bound) {
-            // have not found goal state, but there are nodes with greater depth
-            found = false;
-            remaining = true;
             return value;
         }
     }
@@ -559,12 +596,8 @@ double IteratedDeepening<state, action, environment, heuristic>::dls(environment
         }
         nodeCount++;
         double newBound;
-        if (dfid) {
-            newBound = dls(e, h, childState, current, g, currentVal + 1, bound, found, remaining, nodeCount, path, true);
-        } else {
-            double edgeCost = e.edgeCost(current, childState);
-            newBound = dls(e, h, childState, current, g, currentVal + edgeCost, bound, found, remaining, nodeCount, path, false);
-        }
+        double edgeCost = e.edgeCost(current, childState);
+        newBound = dls(e, h, childState, current, g, currentVal + edgeCost, bound, found, remaining, nodeCount, path);
         if (found) {
             path.emplace_back(current);
             return newBound;
@@ -573,17 +606,13 @@ double IteratedDeepening<state, action, environment, heuristic>::dls(environment
             // there are nodes with greater depth
             any_remaining = true;
         }
-        if (!dfid && newBound < minF) {
+        if (newBound < minF) {
             minF = newBound;
         }
     }
     found = false;
     remaining = any_remaining;
-    if (dfid) {
-        return bound + 1;
-    } else {
-        return minF;
-    }
+    return minF;
 }
 
 template<class state, class action, class environment, class heuristic>

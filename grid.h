@@ -93,9 +93,9 @@ private:
 
 class HeuristicGrid {
 public:
-    // constructor. Takes in a vector of heuristic.
-    // For zero heuristic (Dijkstra's algorithm), pass in an empty vector
-    // If only use default grid heuristic without any differential heuristic, pass in vector<vector<double>>{{0}}
+    // constructor
+    // For zero heuristic (Dijkstra's algorithm), pass 0
+    // For default grid heuristic, pass non-zero
     explicit HeuristicGrid(int heuristic);
     // returns the hcost between two states
     // this is the max hcost of all the heuristics in *hList

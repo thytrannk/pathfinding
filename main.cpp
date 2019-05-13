@@ -18,6 +18,7 @@ using namespace std;
 
 enum algorithm {
     astar,
+    dijkstra,
     idastar,
     optimistic,
     weightedAstar,
@@ -70,7 +71,7 @@ void usage(char *programName) {
                                         " <input_file_1> <input_file_2> <no_of_problems>" << endl
             << "where" << endl
             << "problem_domain: \"p\" (for sliding tile puzzle), \"g\" (for 2D grid), or \"s\" (for travelling salesman)" << endl
-            << "algorithm: \"1\" for A*, \"2\" for IDA*, \"3\" for optimistic search, \"4\" for weighted A*" << endl
+            << "algorithm: \"1\" for A*, \"2\" for Dijkstra, \"3\" for IDA*, \"4\" for optimistic search, \"5\" for weighted A*" << endl
             << "print_path: either \"y\" (to print each step once the path to the goal is found) or \"n\" (not to print path)" << endl
             << "input_file_1: the problem instance file for sliding tile puzzle; map file for 2D grid  (this argument should be left blank for travelling salesman)" << endl
             << "input_file_2: the problem instance file for 2D grid (this argument should be left blank for sliding tile puzzle and travelling salesman)" << endl
@@ -102,12 +103,15 @@ int main(int argc, char **argv) {
             algo = astar;
             break;
         case 2:
-            algo = idastar;
+            algo = dijkstra;
             break;
         case 3:
-            algo = optimistic;
+            algo = idastar;
             break;
         case 4:
+            algo = optimistic;
+            break;
+        case 5:
             algo = weightedAstar;
             break;
         default:
@@ -174,8 +178,10 @@ void programPuzzle(string fileName, algorithm algo, int no_of_problems, int &fai
         EnvironmentPuzzle<StatePuzzle> e;
         // Manhattan distance heuristic
         vector<pair<int, vector<uint8_t>*>> h = {pair<int, vector<uint8_t>*>{0, nullptr}};
+        vector<pair<int, vector<uint8_t>*>> h0;
 
         HeuristicPuzzle astarHeuristic(&h);
+        HeuristicPuzzle zeroHeuristic(&h0);
 
         // read sample number
         int problemNo;
@@ -206,7 +212,11 @@ void programPuzzle(string fileName, algorithm algo, int no_of_problems, int &fai
             vector<StatePuzzle> path;
             args.path = path;
             args.algo = algo;
-            args.h = &astarHeuristic;
+            if (algo == dijkstra) {
+                args.h = &zeroHeuristic;
+            } else {
+                args.h = &astarHeuristic;
+            }
 
             enter_thread = false;
 
@@ -295,6 +305,7 @@ void programGrid(string mapFileName, string problemFileName, algorithm algo, int
         EnvironmentGrid e(xMap, yMap, &map);
 
         HeuristicGrid astarHeuristic(1);
+        HeuristicGrid zeroHeuristic(0);
 
         // read problem file
         // ignore the first line in problem file
@@ -351,7 +362,11 @@ void programGrid(string mapFileName, string problemFileName, algorithm algo, int
             vector<StateGrid> path;
             args.path = path;
             args.algo = algo;
-            args.h = &astarHeuristic;
+            if (algo == dijkstra) {
+                args.h = &zeroHeuristic;
+            } else {
+                args.h = &astarHeuristic;
+            }
 
             enter_thread = false;
 
@@ -408,6 +423,7 @@ void programSales(algorithm algo, int no_of_problems, int &failed, int &problemC
         // create problem instance
         EnvironmentSales e;
         HeuristicSales astarHeuristic(1, e);
+        HeuristicSales zeroHeuristic(0, e);
         StateSales goalState(-1);
 
         // solve problem
@@ -422,7 +438,11 @@ void programSales(algorithm algo, int no_of_problems, int &failed, int &problemC
         vector<StateSales> path;
         args.path = path;
         args.algo = algo;
-        args.h = &astarHeuristic;
+        if (algo == dijkstra) {
+            args.h = &zeroHeuristic;
+        } else {
+            args.h = &astarHeuristic;
+        }
 
         enter_thread = false;
 
@@ -479,7 +499,7 @@ void *runPuzzle(void *arguments) {
     auto start = chrono::steady_clock::now();
 
     auto *args = (argStructPuzzle*) arguments;
-    if (args->algo == astar) {
+    if (args->algo == astar || args->algo == dijkstra) {
         Astar<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> astarPuzzle(*(args->initialState),
                                                                                          *(args->goalState), *(args->h));
         astarPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
@@ -489,7 +509,7 @@ void *runPuzzle(void *arguments) {
         }
     } else if (args->algo == idastar) {
         IteratedDeepening<StatePuzzle, ActionPuzzle, EnvironmentPuzzle<StatePuzzle>, HeuristicPuzzle> iterPuzzle;
-        iterPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
+        iterPuzzle.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
         if (printPath) {
             cout << "Steps:" << endl;
             iterPuzzle.displayPath(args->path, false);
@@ -531,7 +551,7 @@ void *runGrid(void *arguments) {
     auto start = chrono::steady_clock::now();
 
     auto *args = (argStructGrid*) arguments;
-    if (args->algo == astar) {
+    if (args->algo == astar || args->algo == dijkstra) {
         Astar<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> astarGrid(*(args->initialState),
                                                                                     *(args->goalState), *(args->h));
         astarGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
@@ -541,7 +561,7 @@ void *runGrid(void *arguments) {
         }
     } else if (args->algo == idastar) {
         IteratedDeepening<StateGrid, ActionGrid, EnvironmentGrid, HeuristicGrid> iterGrid;
-        iterGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
+        iterGrid.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
         if (printPath) {
             cout << "Steps:" << endl;
             iterGrid.displayPath(args->path, false);
@@ -582,7 +602,7 @@ void *runSales(void *arguments) {
 
     auto start = chrono::steady_clock::now();
     auto *args = (argStructSales*) arguments;
-    if (args->algo == astar) {
+    if (args->algo == astar || args->algo == dijkstra) {
         Astar<StateSales, ActionSales, EnvironmentSales, HeuristicSales> astarSales(*(args->initialState),
                                                                                                       *(args->goalState), *(args->h));
         astarSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
@@ -592,7 +612,7 @@ void *runSales(void *arguments) {
         }
     } else if (args->algo == idastar) {
         IteratedDeepening<StateSales, ActionSales, EnvironmentSales, HeuristicSales> iterSales;
-        iterSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path, false);
+        iterSales.getPath(*(args->e), *(args->h), *(args->initialState), *(args->goalState), args->path);
         if (printPath) {
             cout << "Steps:" << endl;
             iterSales.displayPath(args->path, true);
