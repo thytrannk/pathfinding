@@ -574,6 +574,11 @@ double IteratedDeepening<state, action, environment, heuristic>::dls(environment
             path.emplace_back(current);
             found = true;
             return value;
+        } else if (value > bound) {
+            // have not found goal state, but there are nodes with greater depth
+            found = false;
+            remaining = true;
+            return value;
         }
     }
 
