@@ -53,18 +53,18 @@ namespace std {
 
 class HeuristicPuzzle {
 public:
-    // constructor. Takes in a vector of heuristic. Each element is a pair of <heuristic_number, pointer>.
-    // heuristic_number is 0 for Manhattan distance, 1 for PDB pattern 0-7, 2 for PDB 0,8-9,12-13, 3 for PDB 0,10-11,14-15
-    // pointer is the pointer to the vector storing the corresponding PDB. For Manhattan, it's a nullptr
-    // For zero heuristic (Dijkstra's algorithm), pass in an empty vector
-    explicit HeuristicPuzzle(vector<pair<int, vector<uint8_t>*>> *list);
+    // constructor
+    // For zero heuristic (Dijkstra's algorithm), pass 0
+    // For default grid heuristic, pass non-zero
+    explicit HeuristicPuzzle(int heuristic);
     // returns the hcost between two states
     // this is the max hcost of all the heuristics in *hList
     double hCost(StatePuzzle &node1, StatePuzzle &node2);
     // return if heuristic is consistent
     bool isConsistent();
 private:
-    vector<pair<int, vector<uint8_t>*>> *hList;
+    // h == 0 for zero heuristic; h != 0 for default heuristic
+    int h;
 };
 
 class ActionPuzzle {

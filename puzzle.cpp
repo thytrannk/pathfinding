@@ -3,7 +3,6 @@
 //
 
 #include "puzzle.h"
-#include "puzzlePDB.h"
 #include "util.h"
 #include <iostream>
 
@@ -96,52 +95,30 @@ char ActionPuzzle::getAction() {
     return this->slideDir;
 }
 
-HeuristicPuzzle::HeuristicPuzzle(vector<pair<int, vector<uint8_t> *>> *list) {
-    hList = list;
+HeuristicPuzzle::HeuristicPuzzle(int heuristic) {
+    h = heuristic;
 }
 
 double HeuristicPuzzle::hCost(StatePuzzle &node1, StatePuzzle &node2) {
     double ret = 0;
+    if (h == 0) {
+        // zero heuristic, used for Dijkstra algorithm
+        return ret;
+    }
     vector<int8_t> stateArr(16);
     for (int i = 0; i < 16; i++) {
         stateArr[i] = (int8_t) node1.getValue(i);
     }
-    for (auto &h : *hList) {
-        if (h.first == 0) {
-            // Manhattan distance
-            double md = 0;
-            for (int i = 0; i < 16; i++) {
-                if (stateArr[i] != 0) {
-                    // if this is not a blank
-                    md += ManhattanDist(i, node2.getLocation((int) stateArr[i]));
-                }
-            }
-            if (md > ret) {
-                ret = md;
-            }
-        } else {
-            // PDB
-            vector<int8_t> pattern;
-            if (h.first == 1) {
-                pattern = {0, 1, 2, 3, 4, 5, 6, 7};
-            } else if (h.first == 2) {
-                pattern = {0, 8, 9, 12, 13};
-            } else if (h.first == 3) {
-                pattern = {0, 10, 11, 14, 15};
-            } else {
-                cerr << "Invalid pattern database." << endl;
-                exit(EXIT_FAILURE);
-            }
-            vector<int8_t> stateArr(16);
-            for (int i = 0; i < 16; i++) {
-                stateArr[i] = (int8_t) node1.getValue(i);
-            }
-            StatePuzzleLexi s(stateArr, &pattern);
-            double cost = (*(h.second))[s.getStateID()];
-            if (cost > ret) {
-                ret = cost;
-            }
+    // Manhattan distance
+    double md = 0;
+    for (int i = 0; i < 16; i++) {
+        if (stateArr[i] != 0) {
+            // if this is not a blank
+            md += ManhattanDist(i, node2.getLocation((int) stateArr[i]));
         }
+    }
+    if (md > ret) {
+        ret = md;
     }
     return ret;
 }

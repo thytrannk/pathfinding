@@ -176,12 +176,9 @@ void programPuzzle(string fileName, algorithm algo, int no_of_problems, int &fai
         StatePuzzle goalState(final);
 
         EnvironmentPuzzle<StatePuzzle> e;
-        // Manhattan distance heuristic
-        vector<pair<int, vector<uint8_t>*>> h = {pair<int, vector<uint8_t>*>{0, nullptr}};
-        vector<pair<int, vector<uint8_t>*>> h0;
 
-        HeuristicPuzzle astarHeuristic(&h);
-        HeuristicPuzzle zeroHeuristic(&h0);
+        HeuristicPuzzle astarHeuristic(1);
+        HeuristicPuzzle zeroHeuristic(0);
 
         // read sample number
         int problemNo;
