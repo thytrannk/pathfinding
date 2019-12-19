@@ -25,7 +25,7 @@ uint64_t factorial(int n) {
 }
 
 int ManhattanDist(int start, int goal) {
-    // Manhattan distance between 2 locations on a 4*4 grid
+    // Manhattan distance between 2 locations on a 4*4 grid 
     int xGoal = goal % 4;
     int xStart = start % 4;
     int yGoal = goal / 4;
